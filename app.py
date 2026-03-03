@@ -1,3 +1,5 @@
+%%writefile app.py
+
 import streamlit as st
 import pandas as pd
 from datetime import datetime
@@ -20,11 +22,30 @@ def connect_to_gsheet():
     creds_dict = st.secrets["gcp_service_account"]
     creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
     client = gspread.authorize(creds)
-    sheet = client.open("Lecture_Tracker_DB").sheet1
-    return sheet
+    spreadsheet = client.open("Lecture_Tracker_DB")
+    data_sheet = spreadsheet.worksheet("Sheet1")
+    group_sheet = spreadsheet.worksheet("Groups")
 
-sheet = connect_to_gsheet()
+    return sheet, group_sheet
 
+sheet, group_sheet = connect_to_gsheet()
+
+
+# ==============================
+# Load Groups
+# ==============================
+group_records = group_sheet.get_all_records()
+
+if group_records:
+    group_df = pd.DataFrame(group_records)
+    group_df.columns = group_df.columns.str.strip()
+    groups = group_df["Group ID"].dropna().tolist()
+else:
+    groups = []
+
+if not groups:
+    st.warning("⚠ No groups found. Please add groups from Group Manager page.")
+    st.stop()
 # ----------------------------
 # Expected Columns
 # ----------------------------
@@ -38,6 +59,7 @@ expected_columns = [
     "Break Ended",
     "Lecture Ended",
 ]
+
 
 # ----------------------------
 # Read Data and Ensure Columns
@@ -73,7 +95,7 @@ else:
 with st.form("lecture_form"):
 
     group_id = st.text_input("Group ID")
-    lecture_type = st.selectbox("Lecture Type", ["Offline", "Online"])
+    lecture_type = st.selectbox("Lecture Type", ["Online", "Offline"])
     action = st.radio(
         "Select Action", ["Arrived", "Lecture Started", "Break Started", "Break Ended","Lecture Ended"]
     )
@@ -137,4 +159,4 @@ if submitted:
         ]
         sheet.append_row(new_row)
         st.success(f"✅ Created new record at {now}")
-
+        
