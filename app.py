@@ -21,7 +21,7 @@ def connect_to_gsheet():
     creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
     client = gspread.authorize(creds)
     spreadsheet = client.open("Lecture_Tracker_DB")
-    data_sheet = spreadsheet.worksheet("Sheet1")
+    sheet = spreadsheet.worksheet("Sheet1")
     group_sheet = spreadsheet.worksheet("Groups")
 
     return sheet, group_sheet
@@ -158,4 +158,5 @@ if submitted:
         sheet.append_row(new_row)
         st.success(f"✅ Created new record at {now}")
         
+
 
