@@ -35,6 +35,7 @@ expected_columns = [
     "Lecture Started",
     "Break Started",
     "Break Ended",
+    "Lecture Ended",
 ]
 
 # ----------------------------
@@ -73,7 +74,7 @@ with st.form("lecture_form"):
     group_id = st.text_input("Group ID")
     lecture_type = st.selectbox("Lecture Type", ["Online", "Offline"])
     action = st.radio(
-        "Select Action", ["Arrived", "Lecture Started", "Break Started", "Break Ended"]
+        "Select Action", ["Arrived", "Lecture Started", "Break Started", "Break Ended","Lecture Ended"]
     )
 
     time_mode = st.radio("Time Entry Mode", ["Use Current Date & Time", "Enter Manually"])
@@ -131,6 +132,7 @@ if submitted:
             now if action == "Lecture Started" else "",
             now if action == "Break Started" else "",
             now if action == "Break Ended" else "",
+            now if action == "Lecture Ended" else "",
         ]
         sheet.append_row(new_row)
         st.success(f"✅ Created new record at {now}")
