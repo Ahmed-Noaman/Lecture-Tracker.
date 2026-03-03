@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 from datetime import datetime
+from zoneinfo import ZoneInfo  # built-in in Python 3.9+
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 
@@ -95,7 +96,7 @@ if submitted:
 
     # Determine timestamp
     if time_mode == "Use Current Date & Time":
-        now_dt = datetime.now()
+        now_dt = datetime.now(ZoneInfo("Africa/Cairo"))
     else:
         now_dt = datetime.combine(manual_date, manual_time)
 
