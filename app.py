@@ -1,3 +1,5 @@
+%%writefile app.py
+
 import streamlit as st
 import pandas as pd
 from datetime import datetime
@@ -92,7 +94,7 @@ else:
 # ----------------------------
 with st.form("lecture_form"):
 
-    group_id = st.text_input("Group ID")
+    group_id = st.selectbox("Select Group ID", groups)
     lecture_type = st.selectbox("Lecture Type", ["Online", "Offline"])
     action = st.radio(
         "Select Action", ["Arrived", "Lecture Started", "Break Started", "Break Ended","Lecture Ended"]
@@ -158,5 +160,3 @@ if submitted:
         sheet.append_row(new_row)
         st.success(f"✅ Created new record at {now}")
         
-
-
