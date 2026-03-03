@@ -1,68 +1,17 @@
-import gspread
-from oauth2client.service_account import ServiceAccountCredentials
 import streamlit as st
 import pandas as pd
 from datetime import datetime
-import json
-import os
+import gspread
+from oauth2client.service_account import ServiceAccountCredentials
 
 st.set_page_config(page_title="Lecture Tracker", layout="centered")
 
 st.title("📚 Lecture Logger")
 
-DATA_FILE = "data.csv"
-GROUP_FILE = "groups.json"
-
-# -----------------------
-# Load Groups
-# -----------------------
-if not os.path.exists(GROUP_FILE):
-    with open(GROUP_FILE, "w") as f:
-        json.dump([], f)
-
-with open(GROUP_FILE, "r") as f:
-    groups = json.load(f)
-
-if not groups:
-    st.warning("⚠ Please add Group IDs first from Group Manager page.")
-    st.stop()
-
-# -----------------------
-# Main Form
-# -----------------------
-with st.form("lecture_form"):
-
-    group_id = st.selectbox("Select Group ID", groups)
-
-    lecture_type = st.selectbox(
-        "Lecture Type",
-        ["Online", "Offline"]
-    )
-
-    action = st.radio(
-        "Select Action",
-        ["Arrived", "Lecture Started", "Break Started", "Break Ended","Lecture Ended"]
-    )
-
-    # ----------------------------
-    # Time Entry Option
-    # ----------------------------
-    time_mode = st.radio(
-        "Time Entry Mode",
-        ["Use Current Date & Time", "Enter Manually"]
-    )
-
-    if time_mode == "Enter Manually":
-        manual_date = st.date_input("Select Date")
-        manual_time = st.time_input("Select Time")
-
-    submitted = st.form_submit_button("Save Action")
-
-# -----------------------
-#Connect To Sheet
-# -----------------------
+# ==============================
+# Connect To Google Sheet
+# ==============================
 def connect_to_gsheet():
-
     scope = [
         "https://spreadsheets.google.com/feeds",
         "https://www.googleapis.com/auth/drive",
@@ -76,14 +25,79 @@ def connect_to_gsheet():
     return sheet
 
 
-# -----------------------
+sheet = connect_to_gsheet()
+
+# ==============================
+# Ensure Header Exists
+# ==============================
+expected_columns = [
+    "Date",
+    "Group ID",
+    "Lecture Type",
+    "Arrived",
+    "Lecture Started",
+    "Break Started",
+    "Break Ended",
+]
+
+existing_data = sheet.get_all_values()
+
+if not existing_data:
+    sheet.append_row(expected_columns)
+    st.stop()
+
+# Clean headers (strip spaces)
+headers = [h.strip() for h in existing_data[0]]
+
+if headers != expected_columns:
+    sheet.delete_rows(1)
+    sheet.insert_row(expected_columns, 1)
+
+# ==============================
+# Load Data
+# ==============================
+records = sheet.get_all_records()
+
+if records:
+    df = pd.DataFrame(records)
+    df.columns = df.columns.str.strip()
+else:
+    df = pd.DataFrame(columns=expected_columns)
+
+# ==============================
+# UI Form
+# ==============================
+with st.form("lecture_form"):
+
+    group_id = st.text_input("Group ID")
+
+    lecture_type = st.selectbox(
+        "Lecture Type",
+        ["Online", "Offline"]
+    )
+
+    action = st.radio(
+        "Select Action",
+        ["Arrived", "Lecture Started", "Break Started", "Break Ended"]
+    )
+
+    time_mode = st.radio(
+        "Time Entry Mode",
+        ["Use Current Date & Time", "Enter Manually"]
+    )
+
+    if time_mode == "Enter Manually":
+        manual_date = st.date_input("Select Date")
+        manual_time = st.time_input("Select Time")
+
+    submitted = st.form_submit_button("Save")
+
+# ==============================
 # Save Logic
-# -----------------------
+# ==============================
 if submitted:
 
-    # ----------------------------
-    # Handle Date & Time
-    # ----------------------------
+    # Handle datetime
     if time_mode == "Use Current Date & Time":
         now_dt = datetime.now()
     else:
@@ -92,21 +106,24 @@ if submitted:
     today = now_dt.strftime("%d/%m/%Y")
     now = now_dt.strftime("%d/%m/%Y %H:%M:%S")
 
-
-
-    sheet = connect_to_gsheet()
-    
-    # Get all records
+    # Reload fresh data before writing
     records = sheet.get_all_records()
-    df = pd.DataFrame(records)
-    
+
+    if records:
+        df = pd.DataFrame(records)
+        df.columns = df.columns.str.strip()
+    else:
+        df = pd.DataFrame(columns=expected_columns)
+
+    # Check match Date + Group ID
     mask = (df["Date"] == today) & (df["Group ID"] == group_id)
-    
+
     if mask.any():
-        row_index = mask.idxmax() + 2  # +2 because sheet index starts at 1 and header row
+        row_index = mask.idxmax() + 2  # +2 because header row
         col_index = df.columns.get_loc(action) + 1
         sheet.update_cell(row_index, col_index, now)
-        st.success("Updated existing record.")
+        st.success(f"✅ Updated {action} at {now}")
+
     else:
         new_row = [
             today,
@@ -118,4 +135,4 @@ if submitted:
             now if action == "Break Ended" else "",
         ]
         sheet.append_row(new_row)
-        st.success("Created new record.")
+        st.success(f"✅ Created new record at {now}")
