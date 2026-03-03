@@ -5,12 +5,11 @@ import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 
 st.set_page_config(page_title="Lecture Tracker", layout="centered")
-
 st.title("📚 Lecture Logger")
 
-# ==============================
-# Connect To Google Sheet
-# ==============================
+# ----------------------------
+# Google Sheets connection
+# ----------------------------
 def connect_to_gsheet():
     scope = [
         "https://spreadsheets.google.com/feeds",
@@ -20,16 +19,14 @@ def connect_to_gsheet():
     creds_dict = st.secrets["gcp_service_account"]
     creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
     client = gspread.authorize(creds)
-
     sheet = client.open("Lecture_Tracker_DB").sheet1
     return sheet
 
-
 sheet = connect_to_gsheet()
 
-# ==============================
-# Ensure Header Exists
-# ==============================
+# ----------------------------
+# Expected Columns
+# ----------------------------
 expected_columns = [
     "Date",
     "Group ID",
@@ -40,64 +37,62 @@ expected_columns = [
     "Break Ended",
 ]
 
-existing_data = sheet.get_all_values()
+# ----------------------------
+# Read Data and Ensure Columns
+# ----------------------------
+data = sheet.get_all_values()
 
-if not existing_data:
+if not data:
+    # Sheet empty → insert header row
     sheet.append_row(expected_columns)
     st.stop()
 
-# Clean headers (strip spaces)
-headers = [h.strip() for h in existing_data[0]]
+# First row is header
+header = [h.strip() for h in data[0]]
 
-if headers != expected_columns:
+# Fix header if not matching expected
+if header != expected_columns:
     sheet.delete_rows(1)
     sheet.insert_row(expected_columns, 1)
+    header = expected_columns
 
-# ==============================
-# Load Data
-# ==============================
+# Load sheet data into DataFrame
 records = sheet.get_all_records()
-
 if records:
     df = pd.DataFrame(records)
-    df.columns = df.columns.str.strip()
+    df = df.reindex(columns=expected_columns)
 else:
+    # Empty sheet after header
     df = pd.DataFrame(columns=expected_columns)
 
-# ==============================
-# UI Form
-# ==============================
+# ----------------------------
+# Form UI
+# ----------------------------
 with st.form("lecture_form"):
 
     group_id = st.text_input("Group ID")
-
-    lecture_type = st.selectbox(
-        "Lecture Type",
-        ["Online", "Offline"]
-    )
-
+    lecture_type = st.selectbox("Lecture Type", ["Online", "Offline"])
     action = st.radio(
-        "Select Action",
-        ["Arrived", "Lecture Started", "Break Started", "Break Ended"]
+        "Select Action", ["Arrived", "Lecture Started", "Break Started", "Break Ended"]
     )
 
-    time_mode = st.radio(
-        "Time Entry Mode",
-        ["Use Current Date & Time", "Enter Manually"]
-    )
-
+    time_mode = st.radio("Time Entry Mode", ["Use Current Date & Time", "Enter Manually"])
     if time_mode == "Enter Manually":
         manual_date = st.date_input("Select Date")
         manual_time = st.time_input("Select Time")
 
     submitted = st.form_submit_button("Save")
 
-# ==============================
+# ----------------------------
 # Save Logic
-# ==============================
+# ----------------------------
 if submitted:
 
-    # Handle datetime
+    if not group_id.strip():
+        st.error("⚠ Group ID cannot be empty")
+        st.stop()
+
+    # Determine timestamp
     if time_mode == "Use Current Date & Time":
         now_dt = datetime.now()
     else:
@@ -106,24 +101,27 @@ if submitted:
     today = now_dt.strftime("%d/%m/%Y")
     now = now_dt.strftime("%d/%m/%Y %H:%M:%S")
 
-    # Reload fresh data before writing
+    # Reload fresh data
     records = sheet.get_all_records()
-
     if records:
         df = pd.DataFrame(records)
-        df.columns = df.columns.str.strip()
+        df = df.reindex(columns=expected_columns)
     else:
         df = pd.DataFrame(columns=expected_columns)
 
-    # Check match Date + Group ID
-    mask = (df["Date"] == today) & (df["Group ID"] == group_id)
+    # ----------------------------
+    # Find row with same Date + Group
+    # ----------------------------
+    if not df.empty:
+        mask = (df["Date"] == today) & (df["Group ID"] == group_id)
+    else:
+        mask = pd.Series(dtype=bool)
 
     if mask.any():
-        row_index = mask.idxmax() + 2  # +2 because header row
+        row_index = mask.idxmax() + 2  # +2 because sheet index starts at 1 and header
         col_index = df.columns.get_loc(action) + 1
         sheet.update_cell(row_index, col_index, now)
         st.success(f"✅ Updated {action} at {now}")
-
     else:
         new_row = [
             today,
